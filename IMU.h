@@ -90,8 +90,8 @@ void update_positional_awareness(){
 bs = bs +Xg*dtime/1000;
 //Serial.print("pitch_a ");
 //Serial.print(pitch_a);
-Serial.print("pitch filtered ");
-Serial.print(pitch);
+//Serial.print("pitch filtered ");
+//Serial.print(pitch);
 /*
 Serial.print("Roll_a ");
 Serial.print(roll_a);

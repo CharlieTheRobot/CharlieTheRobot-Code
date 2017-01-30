@@ -1,7 +1,5 @@
 // define max motor speed, can't be higher than around 250
 #define MAX_motor_spd 220
-int set_speed = 110; //starting movement speed
-
 // define pins for motor controllers
 //LHS motor (Drivers perspective)
 #define LHS_CW 10
@@ -37,10 +35,12 @@ double kd = 50;
 
 double current_R_spd = 0.;// right wheel speed in in/s
 double current_L_spd = 0.;//left wheel speed in in/s
+double last_wheel_R_spd = 0;
+double last_wheel_L_spd = 0;
 double smooth_R_spd = 0; //smoothed right wheel speed in in/s
 double smooth_L_spd = 0; //smoothed left wheel speed in in/s
 long last_spd_read_time =0;//last time the wheel speed was calculated
-
+long second_last_spd_read_time = 0;  //time before last that speed was read
 
 void WheelAddTick1(){
         if(Direction1)  num_pulses1++;//duraction is now named num_pulses
@@ -118,16 +118,17 @@ double Smooth(double measurement, double curr_value, double alpha){
 
 //saves both wheel speeds to global variables
 void CaptureBothWheelSpeeds(){
-  double alpha = 0.7;//smoothing factor
+  double alpha = 0.8;//smoothing factor
+  last_wheel_R_spd = current_R_spd;
+  last_wheel_L_spd = current_L_spd;
   current_R_spd = GetWheelSpeed(num_pulses0,last_spd_read_time);
   current_L_spd = GetWheelSpeed(num_pulses1,last_spd_read_time);
   num_pulses0 = 0;//right reset this until next time we read speed
   num_pulses1 = 0;//left
+  second_last_spd_read_time = last_spd_read_time;
   last_spd_read_time= millis();//reset read time until next time we read speed
   smooth_R_spd = Smooth(current_R_spd, smooth_R_spd, alpha);
   smooth_L_spd = Smooth(current_L_spd, smooth_L_spd, alpha);
-  Serial.print(smooth_R_spd);
-  Serial.print(smooth_L_spd);
 }
 
 void EncoderInit(){
@@ -141,4 +142,13 @@ void EncoderInit(){
   attachInterrupt(digitalPinToInterrupt(encoder1pinA), WheelPulses1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoder1pinB), WheelAddTick1, CHANGE);
 }
+double estimate_distance_since_last_update(long time_old, long time_new, double speed_est){//estimates amount moved since last wheel reading
+    // speed estimate (eventually with IMU smoothing)
+    return speed_est * (time_new-time_old);//
+}
 
+double estimate_angle_since_last_update(){//estimates angle moved since last wheel reading
+  //use time and speed for now or magnets???<------------------------------------------
+  double angular_speed = (smooth_L_spd - smooth_R_spd)/2 / 6 *90/300; //positive is to the right, neg to left deg/ms
+  return angular_speed *(last_spd_read_time-second_last_spd_read_time);
+}

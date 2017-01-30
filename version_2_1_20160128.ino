@@ -81,15 +81,65 @@ void setup() {
 
 
   EncoderInit();  //Initialize the interrupt module for the encoder 0 and 1
+//--setup parameters for BT nodes
+backup_a_bit.timeout = 10000; 
+backup_a_bit.distance_to_move = -6; 
+backup_a_bit.desired_speed = -2;
+
+stop_moving.timeout = 2000; 
+stop_moving.desired_speed = 0;
+
+turn_90.timeout = 10000;
+turn_90.angle_to_move = 90;
+turn_90.desired_speed = 2;
+turn_90.direction_to_move = 1;//1 = to the right
+
+turn_90_ccw.timeout = 20000;
+turn_90_ccw.angle_to_move = 90;
+turn_90_ccw.desired_speed = 2;
+turn_90_ccw.direction_to_move = -1;//1 = to the right
+
+carpet_sweep.timeout = 40000;//move length of carpet
+carpet_sweep.distance_to_move = 72;
+carpet_sweep.desired_speed = 3;
+
+half_charlie_dist.timeout = 10000;
+half_charlie_dist.distance_to_move = 10;
+half_charlie_dist.desired_speed = 2;
+
+back_up_and_turn_sequence.SkipToRunning() ;//set this to follow the sequence when running
+follow_path.SkipToRunning();//set this to follow the sequence when running
+dont_be_stuck_selector.SkipToRunning();
+//----------------------------
+
   
 //Behavior Tree: Add nodes to selectors -----------------------------
 upperlevel_sequence.Attach_Node(5001);//get data
     get_data.Attach_Node(1000);//updateorientation
     get_data.Attach_Node(1001);//ReadUT
-upperlevel_sequence.Attach_Node(5002);//emergency triggers
-    emergency_triggers.Attach_Node(1002); //tilt sensing
-    emergency_triggers.Attach_Node(1003);//this is the UT clear--------------might want to put this in with drive? Or put one layer down and if it fails go backwards....
 
+upperlevel_sequence.Attach_Node(5003);//don't be stuck selector
+    dont_be_stuck_selector.Attach_Node(5002);//check for being stuck (emergency trigger)
+       emergency_triggers.Attach_Node(1002); //tilt sensing
+       emergency_triggers.Attach_Node(1003);//this is the UT all clear
+    dont_be_stuck_selector.Attach_Node(5004);//back up and turn around sequence
+       back_up_and_turn_sequence.Attach_Node(1004);//backup
+       back_up_and_turn_sequence.Attach_Node(1005);//stop
+       back_up_and_turn_sequence.Attach_Node(1006);//turn 90 cw
+       back_up_and_turn_sequence.Attach_Node(1005);//stop
+       back_up_and_turn_sequence.Attach_Node (1008);//fwd small inches
+       back_up_and_turn_sequence.Attach_Node(1005);//stop
+       back_up_and_turn_sequence.Attach_Node(1009);//turn 90 ccw
+       
+upperlevel_sequence.Attach_Node(5005);//Follow Path
+    follow_path.Attach_Node (1007);//fwd xxinches
+    back_up_and_turn_sequence.Attach_Node(1005);//stop
+    follow_path.Attach_Node (1006);//turn 90 cc
+    back_up_and_turn_sequence.Attach_Node(1005);//stop
+    follow_path.Attach_Node (1008);//fwd small inches
+    back_up_and_turn_sequence.Attach_Node(1005);//stop
+    follow_path.Attach_Node (1006);//turn 90 cw
+    back_up_and_turn_sequence.Attach_Node(1005);//stop
 //----------------------------------------------------
 
   
@@ -99,62 +149,14 @@ upperlevel_sequence.Attach_Node(5002);//emergency triggers
 
 // the loop function runs over and over again forever
 void loop() {
-  String new_string = "hello";
-  upperlevel_sequence.execute();
-  //heartbeat
   digitalWrite(48, HIGH);   // turn the LED off (HIGH is the voltage level)
-
-  //get and set new speed
+  upperlevel_sequence.execute();//behaviour tree
+  //heartbeat
   
-  //test drive mode
- /* 
-Serial.println(RangeInInches);
-  if (RangeInInches >=7){//assuming nothing in the UT sensor keep driving
-       setspeed_PID(2.0,2.0); // right target, left target in in/s
-       Serial.println("fwd");
-  }else{//or back up and try again
-     //Serial.println("stop");
-     while ((round(smooth_R_spd*10)/10.0 != 0) && (round(smooth_L_spd*10)/10.0 !=0)){
-        
-        setspeed_PID(0,0);
-        delay (100);
-        Serial.println("stop");
-      }
-     while (RangeInInches <=10){
-      
-        Serial.println(RangeInInches);
-        Serial.println("backward");
-        setspeed_PID(-1.5,-1.5); // right target, left target in in/s 
-        delay(100);
-        frontUT.DistanceMeasure();// get the current signal time;
-        RangeInInches = frontUT.microsecondsToInches();//convert the time to inches;
-     }
-     while ((round(smooth_R_spd*10)/10.0 != 0) && (round(smooth_L_spd*10)/10.0 !=0)){
-        
-        setspeed_PID(0,0);
-        delay (100);
-        Serial.println("stop");
-      }
-     long time_snapshot = millis();
-     while ((millis()-time_snapshot) <= 3500){//for xx time
-      //turn right
-      Serial.println("turn");
-      Serial.println(millis()-time_snapshot);
-        
-        setspeed_PID(-1.5,1.5); // right target, left target in in/s 
-        delay(100);
-     }
-      while ((round(smooth_R_spd*10)/10.0 != 0) && (round(smooth_L_spd*10)/10.0 !=0)){
-        
-        setspeed_PID(0,0);
-        delay (100);
-        Serial.println("stop");
-      }
-  }*/
    digitalWrite(48, LOW);    // turn the LED on by making the voltage LOW
    //end heartbeat  
   //stability delay
-  delay(200);
+  delay(300);
    
 }
 
