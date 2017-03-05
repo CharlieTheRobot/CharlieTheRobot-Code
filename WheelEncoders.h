@@ -1,3 +1,13 @@
+/* Wheel encoder.
+       A pin -- digital 2
+       B pin -- digital 4
+       
+    Beacuse of the interrupt port with different board, the following code is only used in UNO and mega2560.
+    If you want to use Leonardo or Romeo,you should change digital pin 3 instead of digital pin 2.
+    See the link for detail http://arduino.cc/en/Reference/AttachInterrupt
+*/
+
+
 // define max motor speed, can't be higher than around 250
 #define MAX_motor_spd 220
 // define pins for motor controllers
@@ -29,6 +39,7 @@ long last_pulse_time1 =0; //tracks when the last pulse time was to remove spurio
 unsigned long lastPIDTime = 0;
 double PIDerrSumR, PIDlastErrR;
 double PIDerrSumL, PIDlastErrL;
+double PIDerrSumTheta, PIDlastErrTheta;
 double kp = 10;
 double ki = .1; 
 double kd = 50;
@@ -147,8 +158,4 @@ double estimate_distance_since_last_update(long time_old, long time_new, double 
     return speed_est * (time_new-time_old);//
 }
 
-double estimate_angle_since_last_update(){//estimates angle moved since last wheel reading
-  //use time and speed for now or magnets???<------------------------------------------
-  double angular_speed = (smooth_L_spd - smooth_R_spd)/2 / 6 *90/300; //positive is to the right, neg to left deg/ms
-  return angular_speed *(last_spd_read_time-second_last_spd_read_time);
-}
+

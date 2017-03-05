@@ -14,7 +14,7 @@ class UpdateOrientation: public Node{//always returns success unless there is an
   public:
     int execute(){
       //stuff to do
-        update_positional_awareness();
+        charlie.update_positional_awareness();
         //return 1;//running
         Serial.println ("update orientation success");
         this->STATUS = 2;
@@ -48,11 +48,11 @@ class Check_Tilt: public Node{//always returns success
       int execute(){
         //stuff to do
         //check to see if we are getting into trouble
-      if (pitch > MAX_PITCH or pitch <(-1*MAX_PITCH) ){
+      if (charlie.pitch > charlie.MAX_PITCH or charlie.pitch <(-1*charlie.MAX_PITCH) ){
           Serial.println ("Max Pitch Exceeded");
           this->STATUS = 3;
            return 3;//fail
-      }else if (roll >MAX_ROLL or roll<(-1*MAX_ROLL)){
+      }else if (charlie.roll >charlie.MAX_ROLL or charlie.roll<(-1*charlie.MAX_ROLL)){
           Serial.println ("Max Roll Exceeded");
           this->STATUS = 3;
           return 3;//fail
@@ -74,13 +74,26 @@ class Drive_Distance: public Node{//if not achieved in time then failure
         //void init(){}//initialization loop, probably needs a flag to be set
       int execute(){
         //stuff to do
-        if (this->STATUS != 1 ){Serial.println ("Start Moving ");start_time = millis(); time_new = millis(); distance_moved = 0;}//capture start time and intialize distance if this is not currently running
-        if ((millis()-start_time) > timeout){Serial.println ("Drive Distance timeout "); this->STATUS = 3; return 3;}//timeout reached---------------------has to go to a shutdown node
+        if (this->STATUS != 1 ){//capture start time and intialize distance if this is not currently running
+          Serial.println ("Start Moving ");
+          start_time = millis(); 
+          time_new = millis(); 
+          distance_moved = 0;
+          start_angle = charlie.yaw;
+         }
+        if ((millis()-start_time) > timeout){Serial.println ("Drive Distance timeout "); this->STATUS = 3; return 3;}//timeout reached
         time_old = time_new;
         time_new = millis();
+
+        //find distance moved so far
         distance_moved = distance_moved + estimate_distance_since_last_update(time_old, time_new, (smooth_L_spd+smooth_R_spd)/2/1000 );//get the move distance
-        if (distance_moved < distance_to_move){//if you have not reached destination keep going
-          setspeed_PID(desired_speed,desired_speed);//set speed to desired
+
+        angle_error = charlie.yaw - start_angle;//yaw should always be a positive angle from 0 2pi(360), possitive angle error means need to turn left to get on track
+        if (angle_error < 0) angle_error = angle_error + 2 * M_PI;//if angle is less  than zero it has wrapped
+        
+        
+        if (abs(distance_moved) < abs(distance_to_move)){//if you have not reached destination keep going
+          setspeed_PID(desired_speed,desired_speed, angle_error);//set speed to desired
           Serial.print ("Have driven ");
           Serial.print (distance_moved);
           Serial.print (" of ");
@@ -99,7 +112,9 @@ class Drive_Distance: public Node{//if not achieved in time then failure
       }
     protected:
       long start_time, time_old, time_new;//time movement started
-      double distance_moved;
+      double distance_moved =0;
+      double start_angle =0;//starting angle for the movement (track this later)
+      double angle_error = 0;
 };
 class Set_Speed: public Node{//if not achieved in time then failure
     public:
@@ -136,32 +151,25 @@ class Turn: public Node{//if not achieved in time then failure
     public:
         long timeout;//howlong the move has untilfailure
         double desired_speed;//how fast you would like to move
-        double angle_to_move;
+        double angle_to_move;//HOW FAR TO TURN IN RADIANS
         double direction_to_move;
           //void init(){}//initialization loop, probably needs a flag to be set
       int execute(){
         //stuff to do
-        if (this->STATUS != 1 ){start_time = millis(); angle_moved = 0;Serial.println ("Start Turning Turning ");}//capture start time and intialize angle if this is not currently running
+        if (this->STATUS != 1 ){start_time = millis(); start_angle = charlie.yaw; angle_moved = 0; Serial.print ("Start Turning ");Serial.println (angle_to_move * 180/PI);}//capture start time and intialize angle if this is not currently running
         if ((millis()-start_time) > timeout){this->STATUS = 3; Serial.println ("Timeout on Turning "); return 3;}//timeout reached
-        
-        angle_moved = angle_moved + estimate_angle_since_last_update();//get the move angle in deg (right is +)<----------this doesn't really handle direction properly....
+        Serial.print ("Current last angle");Serial.print (last_angle);
+
+        angle_moved = angle_moved + charlie.gyro_angle_change;
+       
         if (abs(angle_moved) < angle_to_move){//if you have not reached destination keep going
           if(direction_to_move == 1){//right
               setspeed_PID(-desired_speed,desired_speed);//set speed to desired
-              Serial.print ("Have turned ");
-              Serial.print (angle_moved);
-              Serial.print (" degrees CW and target is ");
-              Serial.print (angle_to_move);
-              Serial.println (" degrees");
+              Serial.println("CW turn ongoing");
               this->STATUS = 1;
               return 1;//still going so return running
           }else{
               setspeed_PID(desired_speed,-desired_speed);//set speed to desired
-             Serial.print ("Have turned ");
-              Serial.print (angle_moved);
-              Serial.print (" degrees CCW and target is ");
-              Serial.print (angle_to_move);
-              Serial.println (" in/s");
               this->STATUS = 1;
               return 1;//still going so return running
           }
@@ -177,14 +185,15 @@ class Turn: public Node{//if not achieved in time then failure
     protected:
       long start_time;//time movement started
       double angle_moved;
-      
+      double start_angle;
+  
 };
 //setup behaviour tree nodes ---------------------------------------
   UpdateOrientation updateorientation; //makes an update orientation node
-  ReadUT readUT;//read UT sensor node
+  ReadUT readUT;//1001 read UT sensor node
   Check_Tilt checktilt;//check to make sure tilts are OK
   Drive_Distance backup_a_bit; //----------------I need these to work!!!!!!!!
-  Set_Speed stop_moving; 
+  Set_Speed stop_moving; //1005
   Turn turn_90;
   Drive_Distance carpet_sweep;//1007
   Drive_Distance half_charlie_dist;//1008
@@ -212,7 +221,7 @@ class UTAreClear: public Node{//checks that UT sensors are not reading a problem
       }
 };
 //setup rest of behaviour tree nodes ---------------------------------------
-UTAreClear UTareclear;//checks that UT sensors are clear from obstacles has to be down here since UTAreClear depends on UT being read...
+UTAreClear UTareclear;//1003 checks that UT sensors are clear from obstacles has to be down here since UTAreClear depends on UT being read...
 //----------------------------------------------------------
 class Selector: public Node{//group of child nodes
   //executres each child sequenctially left to right
