@@ -45,10 +45,13 @@ class Robot{
       double accel_cal_Y = -.08; //compus calibration for Y direction
       double accel_cal_Z = -.02; //compus calibration for z direction
 
+      double min_cal_angle = 2*M_PI*1.1;//minimum rotation required to consider a good calibration
+
       void update_positional_awareness();
       void update_imu_values ();
       void update_heading();
       void report_imu (int);
+
 
    private:
       int dtime; //delta t bewteen this and last time stamp

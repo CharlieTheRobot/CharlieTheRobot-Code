@@ -158,8 +158,6 @@ class Turn: public Node{//if not achieved in time then failure
         //stuff to do
         if (this->STATUS != 1 ){start_time = millis(); start_angle = charlie.yaw; angle_moved = 0; Serial.print ("Start Turning ");Serial.println (angle_to_move * 180/PI);}//capture start time and intialize angle if this is not currently running
         if ((millis()-start_time) > timeout){this->STATUS = 3; Serial.println ("Timeout on Turning "); return 3;}//timeout reached
-        Serial.print ("Current last angle");Serial.print (last_angle);
-
         angle_moved = angle_moved + charlie.gyro_angle_change;
        
         if (abs(angle_moved) < angle_to_move){//if you have not reached destination keep going

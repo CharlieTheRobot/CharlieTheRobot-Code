@@ -54,10 +54,10 @@ void setspeed_PID(double Rtarget, double Ltarget, double angle_error = 0)
    /*Compute PID Output*/
    PWM_R = (kp * errorR + ki * PIDerrSumR + kd * dErrR)/PWM_Ratio;
    PWM_L = (kp * errorL + ki * PIDerrSumL + kd * dErrL)/PWM_Ratio;
-   delta_PWM_theta = (kp * errorTheta + ki * PIDerrSumTheta + kd * dErrTheta)/PWM_Ratio;
+   delta_PWM_theta = (kp * angle_error + ki * PIDerrSumTheta + kd * dErrTheta)/PWM_Ratio;
    
    //adjust to make sure we are going straight.
-   if (angle_error > 0){PWM_R = PWM_R - delta_PWM_theta;}elseif (angle_error < 0){PWM_L = PWM_L - delta_PWM_theta;}
+   if (angle_error > 0){PWM_R = PWM_R - delta_PWM_theta;} else if (angle_error < 0){PWM_L = PWM_L - delta_PWM_theta;}
   
    if (PWM_R > MAX_motor_spd) PWM_R = MAX_motor_spd;
    if (PWM_R < - MAX_motor_spd) PWM_R = -MAX_motor_spd;

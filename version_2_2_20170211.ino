@@ -104,7 +104,7 @@ upperlevel_sequence.Attach_Node(5005);//Follow Path
 //----------------------------------------------------
 //Magnet calibration x, y, z if desired
 //-------------------------------------------------
-//calibrate_compass();
+calibrate_compass(1);
 //calibrate_gyros();
 //calibrate_accelerometers();
   
@@ -132,7 +132,7 @@ void loop() {
    digitalWrite(48, LOW);    // turn the LED on by making the voltage LOW
    //end heartbeat  
   //stability delay
-  delay(10);
+  delay(100);
    
 }
 

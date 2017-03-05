@@ -221,36 +221,67 @@ void Robot::update_positional_awareness (){
     update_heading();  
 } 
 
-void calibrate_compass(){
+void calibrate_compass(boolean partial = 0){
   long start_time_setup; 
   start_time_setup = millis();
-  delay(5000);
-  while (millis() - start_time_setup < 40000){//give you 40 seconds to calibrate from when you turn it on
-    //grab magnetometer values
-    charlie.update_positional_awareness();
-    double compass_max = 80;
-    //filter
-
-    //if(charlie.Xm < compass_max && abs(charlie.Xm) < compass_max&& charlie.Ym < compass_max&& abs(charlie.Ym) < compass_max&& charlie.Zm < compass_max&& abs(charlie.Zm) < compass_max){
-        if (charlie.Xm > charlie.max_Xm ) {charlie.max_Xm = charlie.Xm;}
-        if (charlie.Xm < charlie.min_Xm ) {charlie.min_Xm = charlie.Xm;}
-    
-        if (charlie.Ym > charlie.max_Ym ) {charlie.max_Ym = charlie.Ym;}
-        if (charlie.Ym < charlie.min_Ym ) {charlie.min_Ym = charlie.Ym;}
-
-        if (charlie.Zm > charlie.max_Zm ) {charlie.max_Zm = charlie.Zm;}
-        if (charlie.Zm < charlie.min_Zm ) {charlie.min_Zm = charlie.Zm;}
-        charlie.report_imu(1);
-    //}
-  };
-  charlie.mag_cal_X = (charlie.max_Xm + charlie.min_Xm)/2;
-  charlie.mag_cal_Y = (charlie.max_Ym + charlie.min_Ym)/2;
-  charlie.mag_cal_Z = (charlie.max_Zm + charlie.min_Zm)/2;
-
-  charlie.mag_scale_X = (charlie.max_Xm - charlie.min_Xm)/2;
-  charlie.mag_scale_Y = (charlie.max_Ym - charlie.min_Ym)/2;
-  charlie.mag_scale_Z = (charlie.max_Zm - charlie.min_Zm)/2;
+  double cal_angle_moved = 0;
   
+  delay(1000);
+  if (partial == 1){//if this is a partial cal only
+    setspeed_PID(+100,-100);//set speed to desired
+  
+    while (millis() - start_time_setup < 40000){//give you 40 seconds to calibrate from when you turn it on
+      //grab magnetometer values
+      charlie.update_positional_awareness();
+      cal_angle_moved = cal_angle_moved - charlie.gyro_angle_change;
+      Serial.print ("cal_angle_moved"); Serial.println (cal_angle_moved);
+      //filter out bad readings
+
+          if (charlie.Xm > charlie.max_Xm ) {charlie.max_Xm = charlie.Xm;}
+          if (charlie.Xm < charlie.min_Xm ) {charlie.min_Xm = charlie.Xm;}
+    
+          if (charlie.Ym > charlie.max_Ym ) {charlie.max_Ym = charlie.Ym;}
+          if (charlie.Ym < charlie.min_Ym ) {charlie.min_Ym = charlie.Ym;}
+
+          if(partial ==0){
+              if (charlie.Zm > charlie.max_Zm ) {charlie.max_Zm = charlie.Zm;}
+              if (charlie.Zm < charlie.min_Zm ) {charlie.min_Zm = charlie.Zm;}
+          }
+          charlie.report_imu(1);
+          if (cal_angle_moved >= charlie.min_cal_angle){break;}//exit if we reach the desired limit
+      //}
+    };
+    setspeed_PID(0,0);
+  } else {
+    while (millis() - start_time_setup < 40000){//give you 40 seconds to calibrate from when you turn it on
+      //grab magnetometer values
+      charlie.update_positional_awareness();
+      
+      //filter out bad readings
+
+          if (charlie.Xm > charlie.max_Xm ) {charlie.max_Xm = charlie.Xm;}
+          if (charlie.Xm < charlie.min_Xm ) {charlie.min_Xm = charlie.Xm;}
+    
+          if (charlie.Ym > charlie.max_Ym ) {charlie.max_Ym = charlie.Ym;}
+          if (charlie.Ym < charlie.min_Ym ) {charlie.min_Ym = charlie.Ym;}
+
+          if (charlie.Zm > charlie.max_Zm ) {charlie.max_Zm = charlie.Zm;}
+          if (charlie.Zm < charlie.min_Zm ) {charlie.min_Zm = charlie.Zm;}
+          
+          charlie.report_imu(1);
+      //}
+    };
+  }
+  
+  if ((partial ==1 and cal_angle_moved >= charlie.min_cal_angle) or partial ==0){
+    charlie.mag_cal_X = (charlie.max_Xm + charlie.min_Xm)/2;
+    charlie.mag_cal_Y = (charlie.max_Ym + charlie.min_Ym)/2;
+    if(partial ==0){charlie.mag_cal_Z = (charlie.max_Zm + charlie.min_Zm)/2;}
+
+    charlie.mag_scale_X = (charlie.max_Xm - charlie.min_Xm)/2;
+    charlie.mag_scale_Y = (charlie.max_Ym - charlie.min_Ym)/2;
+    if(partial == 0){charlie.mag_scale_Z = (charlie.max_Zm - charlie.min_Zm)/2;}
+  }
   Serial.println("final orientation report");
   charlie.report_imu(3);
 }
