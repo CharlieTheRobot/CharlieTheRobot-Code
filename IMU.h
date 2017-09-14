@@ -1,3 +1,6 @@
+#include <PololuMaestro.h>
+
+
 //setup Gsensor (10DOF), pins must be SDA/STL pins on mega board
 #include <Wire.h>
 #include <GY80.h>
@@ -85,11 +88,28 @@ void Robot::update_heading (){
     //update change in angle using gyro about Z axis
     gyro_angle_change =  (Zg * dtime/1000);//dtime is ms,gyro is in s
     //update yaw fusing gyro about Z and magnets
-     yaw = Complementary(yaw,yaw_mag, Zg, dtime, 0.075);//original (was working if calibration is good)
+     //yaw = Complementary(yaw,yaw_mag, Zg, dtime, 0.075);//original (was working if calibration is good)
+    yaw = yaw +gyro_angle_change;//no magnet, only gyro//<--add a use magnets flag somewhere...
+
+    charlie.current_heading_est = charlie.current_heading_est-gyro_angle_change;//<--update charlie.heading est here and make sure it doesn't get updated anywhere else, always refer back to charlie!
     
-    //yaw = yaw +gyro_angle_change;//no magnet, only gyro
+    //<--add rollover/roll under protection here this should be in a loop until it is in bounds
+    while (charlie.current_heading_est < 0 or charlie.current_heading_est > 2*PI){
+      if (charlie.current_heading_est <0){
+            charlie.current_heading_est =charlie.current_heading_est+2*PI;
+      }else if(charlie.current_heading_est > (2*PI)){
+            charlie.current_heading_est =charlie.current_heading_est-2*PI;
+      }
     }
- 
+    charlie.heading_error = charlie.current_desired_heading - charlie.current_heading_est;
+    if (charlie.heading_error <-PI){
+      charlie.heading_error = charlie.heading_error+2*PI;
+    }
+    //charlie.heading_error = -charlie.heading_error;
+     //Serial.print ("charlie desired ");Serial.println (charlie.current_desired_heading * 180/PI);
+     //Serial.print ("charlie actual ");Serial.println (charlie.current_heading_est * 180/PI);
+     //Serial.print ("charlie heading Error ");Serial.println (charlie.heading_error * 180/PI);
+}   
 void Robot::report_imu (int report_value){
   if (report_value ==1){
       Serial.print("Xm: ");
@@ -190,7 +210,7 @@ void Robot::update_positional_awareness (){
           
         delay(20);
     }
-    //get the average of the reading, there are 5 readings but we only uses 4
+    //get the average of the reading, there are 5 readings but we only use 4
     //throw out the highest, as it is the most likely to be an error
     for(int a= 0; a<=8;a = a+1){
       
@@ -228,8 +248,11 @@ void calibrate_compass(boolean partial = 0){
   
   delay(1000);
   if (partial == 1){//if this is a partial cal only
-    setspeed_PID(+100,-100);//set speed to desired
-  
+    //setspeed_PID(-100,+100);//set speed to desired (turn right)
+    charlie.set_speed = 0;
+    charlie.current_desired_heading = PI;//<--need to set rotation here
+    
+    
     while (millis() - start_time_setup < 40000){//give you 40 seconds to calibrate from when you turn it on
       //grab magnetometer values
       charlie.update_positional_awareness();
@@ -251,7 +274,8 @@ void calibrate_compass(boolean partial = 0){
           if (cal_angle_moved >= charlie.min_cal_angle){break;}//exit if we reach the desired limit
       //}
     };
-    setspeed_PID(0,0);
+    //setspeed_PID(0,0);
+    charlie.set_speed = 0;
   } else {
     while (millis() - start_time_setup < 40000){//give you 40 seconds to calibrate from when you turn it on
       //grab magnetometer values

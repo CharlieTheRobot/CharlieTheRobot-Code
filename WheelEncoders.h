@@ -7,24 +7,13 @@
     See the link for detail http://arduino.cc/en/Reference/AttachInterrupt
 */
 
-
-// define max motor speed, can't be higher than around 250
-#define MAX_motor_spd 220
-// define pins for motor controllers
-//LHS motor (Drivers perspective)
-#define LHS_CW 10
-#define LHS_CCW 11
-
-//RHS motor (drivers perspective)
-#define RHS_CW 12
-#define RHS_CCW 13
-
+//<-------------------rewrite to use classes.  Use up and down ticks.  make simple program that runs constant speed and plots ticks.
 //right wheel encoder 0
 const byte encoder0pinA = 19;                  //A pin -> the interrupt pin 2
 const byte encoder0pinB = 18;                  //B pin -> the digital pin 3
 byte encoder0PinALast;
 int num_pulses0;                               //the number of the pulses
-boolean Direction0;                            //the rotation direction 
+
 long last_pulse_time0 =0; //tracks when the last pulse time was to remove spurious pulses
 
 //left wheel encoder 1
@@ -32,7 +21,7 @@ const byte encoder1pinA = 2;                  //A pin -> the interrupt pin 19
 const byte encoder1pinB = 3;                  //B pin -> the digital pin 18
 byte encoder1PinALast;
 int num_pulses1;                               //the number of the pulses
-boolean Direction1;                            //the rotation direction 
+
 long last_pulse_time1 =0; //tracks when the last pulse time was to remove spurious pulses
 
 //PID control variables
@@ -40,9 +29,6 @@ unsigned long lastPIDTime = 0;
 double PIDerrSumR, PIDlastErrR;
 double PIDerrSumL, PIDlastErrL;
 double PIDerrSumTheta, PIDlastErrTheta;
-double kp = 10;
-double ki = .1; 
-double kd = 50;
 
 double current_R_spd = 0.;// right wheel speed in in/s
 double current_L_spd = 0.;//left wheel speed in in/s
@@ -53,13 +39,13 @@ double smooth_L_spd = 0; //smoothed left wheel speed in in/s
 long last_spd_read_time =0;//last time the wheel speed was calculated
 long second_last_spd_read_time = 0;  //time before last that speed was read
 
-void WheelAddTick1(){
-        if(Direction1)  num_pulses1++;//duraction is now named num_pulses
+void WheelAddTick1(){//left
+        if(charlie.direction_LH)  num_pulses1++;//if direction is true, forward and add ticks
         else  num_pulses1--;
 
 }
-void WheelAddTick0(){
-      if(Direction0)  num_pulses0++;//duraction is now named num_pulses
+void WheelAddTick0(){//right
+      if(charlie.direction_RH)  num_pulses0++;//if direction is true, forward and add ticks
       else  num_pulses0--;
  }
 void WheelPulses0(){
@@ -68,19 +54,13 @@ void WheelPulses0(){
 
   if((encoder0PinALast == LOW) && curr_state0==HIGH){//rising change only
     int val = digitalRead(encoder0pinB);
-    if(val == LOW && Direction0){
-      Direction0 = true;                       //Forward
-    }
-    else if(val == HIGH && !Direction0){
-      Direction0 = false;                        //reverse
-    }
   }
   encoder0PinALast = curr_state0;
   
    //only increment if it is possible we've pulsed
   this_pulse_time0 = millis();
   if(this_pulse_time0-last_pulse_time0 > 1){
-      if(Direction0)  num_pulses0++;//duration is now named num_pulses
+      if(charlie.direction_RH)  num_pulses0++;//duration is now named num_pulses
       else  num_pulses0--;
       last_pulse_time0 =this_pulse_time0;
   }
@@ -93,19 +73,13 @@ void WheelPulses1(){
 
   if((encoder1PinALast == LOW) && curr_state1==HIGH){//rising change only
     int val = digitalRead(encoder1pinB);
-    if(val == LOW && Direction1){
-      Direction1 = false;                       //forward
-    }
-    else if(val == HIGH && !Direction1){
-      Direction1 = true;                        //reverse
-    }
   }
   encoder1PinALast = curr_state1;
   
    //only increment if it is possible we've pulsed
   this_pulse_time1 = millis();
   if(this_pulse_time1-last_pulse_time1 > 1){
-      if(Direction1)  num_pulses1++;//duraction is now named num_pulses
+      if(charlie.direction_LH)  num_pulses1++;//duraction is now named num_pulses
       else  num_pulses1--;
       last_pulse_time1 =this_pulse_time1;
   }
@@ -140,15 +114,18 @@ void CaptureBothWheelSpeeds(){
   last_spd_read_time= millis();//reset read time until next time we read speed
   smooth_R_spd = Smooth(current_R_spd, smooth_R_spd, alpha);
   smooth_L_spd = Smooth(current_L_spd, smooth_L_spd, alpha);
+  charlie.current_speed = (smooth_R_spd + smooth_L_spd)/2;
+  //Serial.print ("smooth_R_spd");Serial.print (smooth_R_spd);
+  //Serial.print ("smooth_L_spd");Serial.println (smooth_L_spd);
 }
 
 void EncoderInit(){
-  Direction0 = true;                            //default -> Forward  
+  
   pinMode(encoder0pinA,INPUT);
   pinMode(encoder0pinB,INPUT);
   pinMode(encoder1pinA,INPUT);
   pinMode(encoder1pinB,INPUT);  
-  attachInterrupt(digitalPinToInterrupt(encoder0pinA), WheelPulses0, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoder0pinA), WheelPulses0, CHANGE);//wheel pulse and add tick pretty much same thing, should replace with a class...
   attachInterrupt(digitalPinToInterrupt(encoder0pinB), WheelAddTick0, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoder1pinA), WheelPulses1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoder1pinB), WheelAddTick1, CHANGE);

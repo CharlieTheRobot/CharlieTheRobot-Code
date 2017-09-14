@@ -5,103 +5,85 @@
  * max tested is 254 without cogging 
  */
 
-double Ltarget_last = 0;
-double Rtarget_last = 0;
-double angle_error_last =0;
 
-void setspeed_PID(double Rtarget, double Ltarget, double angle_error = 0)
+
+#include <PID_v1.h>
+// define max motor speed, can't be higher than around 250
+#define MAX_motor_spd 200 //pwm pulses around 200 is ususally good
+
+// define pins for motor controllers
+//LHS motor (Drivers perspective)
+#define LHS_CW 10
+#define LHS_CCW 11
+
+//RHS motor (drivers perspective)
+#define RHS_CW 12
+#define RHS_CCW 13
+
+//Define Variables we'll be connecting to
+double LH_Setpoint =0, LH_Input =0, LH_Output;
+double RH_Setpoint=0, RH_Input=0, RH_Output;
+double Speed_Output;//speed  is in inches/sec but output should be PWM's to make the math easy
+double Heading_Output; //output is in motor PWM can be +/- I guess (this may need to change)
+double adjuster = 0;
+
+//Specify the links and initial tuning parameters
+
+//PID Heading_PID(&charlie.current_heading_est, &Heading_Output, &charlie.current_desired_heading,10,100,0, DIRECT);//old
+PID Heading_PID(&charlie.heading_error, &Heading_Output, 0,80,80,.1, DIRECT);//10/100/0 has to be geographic heading or this doesn't make sense (keeps going until heading achieved).  target is 0 heading error.  error is updated in IMU update loop.
+PID Speed_PID(&charlie.current_speed, &Speed_Output, &charlie.set_speed,50,80,0.1, DIRECT);
+
+void boot_PIDs()
+{
+  
+  //use max/min motor speed for each, to save variable space.  mean nothing anyway since it is scaled with P
+  Speed_PID.SetOutputLimits(-MAX_motor_spd, MAX_motor_spd);
+  Heading_PID.SetOutputLimits(-MAX_motor_spd, MAX_motor_spd);
+
+  //turn the PID on
+  Speed_PID.SetMode(AUTOMATIC);
+  Heading_PID.SetMode(AUTOMATIC);
+}
+
+void update_PIDs()//takes a speed and heading and sets PWM of both motors accordingly
 {
   CaptureBothWheelSpeeds();
-  double PWM_Ratio = 1;
-  double PWM_R = 0;
-  double PWM_L = 0;
-  double delta_PWM_theta = 0;
+  Heading_PID.Compute();//;gives a value of how far off we are in heading returned in PWM's
+  Speed_PID.Compute();//looks at average speed of two tracks and returns an adjustment in PWM's
+ 
   
-   /*How long since we last calculated*/
-   unsigned long now = millis();
-   double timeChange = (double)(now - lastPIDTime);
+  if (abs(Speed_Output) + abs(Heading_Output)> MAX_motor_spd){adjuster = MAX_motor_spd-(Speed_Output + Heading_Output);}
+  LH_Setpoint = Speed_Output - Heading_Output-adjuster;//<--might have this backwards
+  RH_Setpoint = Speed_Output + Heading_Output-adjuster;//<--need something here to prevent saturation, i.e. adjuster, ensure that heading differential can be maxed out even if speed is saturated
+  if (charlie.set_speed ==0){LH_Setpoint=0;RH_Setpoint=0;}//full stop if we want to stop
   
-   /*Compute all the working error variables*/
-   double errorR = Rtarget - smooth_R_spd;
-   double errorL = Ltarget - smooth_L_spd;
-
-   if (Ltarget != Ltarget_last){//reset integral error if speed setpoint has changed
-    PIDerrSumL = 0;
-    PIDerrSumTheta = 0;
-   }
-   if (Rtarget != Rtarget_last){
-    PIDerrSumR = 0;
-    PIDerrSumTheta = 0;
-   }
-
-   
-   PIDerrSumR += (errorR * timeChange);
-   PIDerrSumL += (errorL * timeChange);
-   PIDerrSumTheta +=(angle_error * timeChange);//error from heading angle
-   
-   double dErrR = (errorR - PIDlastErrR) / timeChange;
-   double dErrL = (errorL - PIDlastErrL) / timeChange;
-   double dErrTheta =(angle_error-PIDlastErrTheta)/timeChange;
-
-   //clamp integral errors
-   if (PIDerrSumR > 50000) PIDerrSumR = 50000;//clamp integral
-   if (PIDerrSumL > 50000) PIDerrSumL = 50000;//clamp integral
-   if (PIDerrSumR < -50000) PIDerrSumR = -50000;//clamp integral
-   if (PIDerrSumL < -50000) PIDerrSumL = -50000;//clamp integral
-   if (PIDerrSumTheta > 50000) PIDerrSumTheta = 50000;//clamp integral
-   if (PIDerrSumTheta < -50000) PIDerrSumTheta = -50000;//clamp integral
-   
-   /*Compute PID Output*/
-   PWM_R = (kp * errorR + ki * PIDerrSumR + kd * dErrR)/PWM_Ratio;
-   PWM_L = (kp * errorL + ki * PIDerrSumL + kd * dErrL)/PWM_Ratio;
-   delta_PWM_theta = (kp * angle_error + ki * PIDerrSumTheta + kd * dErrTheta)/PWM_Ratio;
-   
-   //adjust to make sure we are going straight.
-   if (angle_error > 0){PWM_R = PWM_R - delta_PWM_theta;} else if (angle_error < 0){PWM_L = PWM_L - delta_PWM_theta;}
-  
-   if (PWM_R > MAX_motor_spd) PWM_R = MAX_motor_spd;
-   if (PWM_R < - MAX_motor_spd) PWM_R = -MAX_motor_spd;
-
-   if (PWM_L > MAX_motor_spd) PWM_L = MAX_motor_spd;
-   if (PWM_L < - MAX_motor_spd) PWM_L = -MAX_motor_spd;
-
-    Serial.print("PWR Right = "); Serial.print(PWM_R); Serial.print("PIDerrSumR Right = "); Serial.print(PIDerrSumR);
-    Serial.print(" PWR RLEft = "); Serial.print(PWM_L);Serial.print("PIDerrSumL Right = "); Serial.println(PIDerrSumL);
-   //now make the new speed the intermediate speed
-   if(Rtarget ==0){//stop immediately
+  //now send the PWM values to the motors...(LH_Output is the desired PWM set point)
+  if (RH_Setpoint >= 0){//forward
       analogWrite(RHS_CCW,LOW);
+      analogWrite(RHS_CW,abs(RH_Setpoint));
+      charlie.direction_RH = 1;
+   }else{//backwards
       analogWrite(RHS_CW,LOW);
-      PIDerrSumR=0;
-      PIDlastErrR = 0;
-      errorR = 0;
-    }else if (PWM_R >= 0){
-      analogWrite(RHS_CCW,LOW);
-      analogWrite(RHS_CW,abs(PWM_R));
-   }else{
-      analogWrite(RHS_CW,LOW);
-      analogWrite(RHS_CCW,abs(PWM_R));
+      analogWrite(RHS_CCW,abs(RH_Setpoint));
+      charlie.direction_RH = 0;
    }
-   if(Ltarget ==0){//stop immediately
+  if (LH_Setpoint >= 0){
       analogWrite(LHS_CCW,LOW);
+      analogWrite(LHS_CW,abs(LH_Setpoint));
+      charlie.direction_LH = 1;
+  }else{
       analogWrite(LHS_CW,LOW);
-      PIDerrSumL=0;
-      PIDlastErrL = 0;
-      errorL = 0;
-    } else if (PWM_L >= 0){
-      analogWrite(LHS_CCW,LOW);
-      analogWrite(LHS_CW,abs(PWM_L));
-   }else{
-      analogWrite(LHS_CW,LOW);
-      analogWrite(LHS_CCW,abs(PWM_L));
+      analogWrite(LHS_CCW,abs(LH_Setpoint));
+      charlie.direction_LH = 0;
    }
+  
+  
+   //Serial.print ("curr speed: "); Serial.print (charlie.current_speed);Serial.print (" set speed: ");Serial.println (charlie.set_speed);
+   //Serial.print ("curr heading: "); Serial.print (charlie.current_heading_est);Serial.print (" set heading: ");Serial.println (charlie.current_desired_heading);
+   //Serial.print ("RH PWM: "); Serial.print (RH_Setpoint);Serial.print (" LH PWM: ");Serial.println (LH_Setpoint);
+
    
-   /*Remember some variables for next time*/
-   PIDlastErrR = errorR;
-   PIDlastErrL = errorL;
-   PIDlastErrTheta = angle_error;
-   lastPIDTime = now;
-   
-    Ltarget_last = Ltarget;
-    Rtarget_last = Rtarget;
-       
-    }
+}
+
+
+
